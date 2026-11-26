@@ -161,13 +161,13 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "Invalid conversation history." });
   }
 
-  const safeHistory = history.map(item => {
-    if (!item || !["user", "assistant"].includes(item.role) ||
-        typeof item.content !== "string" || item.content.length > 20000) {
-      throw new Error("Invalid history item.");
-    }
-    return { role: item.role, content: item.content };
-  });
+  const validHistory = history.every(item =>
+    item && ["user", "assistant"].includes(item.role) &&
+    typeof item.content === "string" && item.content.length <= 20000);
+  if (!validHistory) {
+    return res.status(400).json({ error: "Invalid conversation history." });
+  }
+  const safeHistory = history.map(item => ({ role: item.role, content: item.content }));
 
   const messages = [...safeHistory, { role: "user", content: message.trim() }];
   const configured = availableProviders();
@@ -212,7 +212,7 @@ app.post("/api/chat", async (req, res) => {
   });
 });
 
-app.get("*", (req, res) => {
+app.get("/{*splat}", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
