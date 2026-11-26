@@ -230,7 +230,10 @@ async function sendMessage() {
       body: JSON.stringify({ message, history: chatHistory, mode, provider })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "AI request failed");
+    if (!response.ok) {
+      const detail = Array.isArray(data.details) && data.details.length ? "\n\n" + data.details.join("\n") : "";
+      throw new Error((data.error || "AI request failed") + detail);
+    }
     loading.textContent = data.answer;
     $("#chatProviderLabel").textContent = `Answered by ${data.provider}`;
     chatHistory.push({ role: "user", content: message }, { role: "assistant", content: data.answer });
