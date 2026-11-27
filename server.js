@@ -8,7 +8,6 @@ const path = require("path");
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(helmet({
   contentSecurityPolicy: {
@@ -36,8 +35,11 @@ const apiLimiter = rateLimit({
 
 app.use("/api/", apiLimiter);
 
+const PROVIDER_ORDER = ["deepseek", "gemini", "groq", "openrouter"];
+
 function availableProviders() {
   return [
+    { id: "deepseek", key: process.env.DEEPSEEK_API_KEY },
     { id: "gemini", key: process.env.GEMINI_API_KEY },
     { id: "groq", key: process.env.GROQ_API_KEY },
     { id: "openrouter", key: process.env.OPENROUTER_API_KEY }
@@ -91,19 +93,26 @@ async function callGemini(messages, mode) {
 
 async function callOpenAICompatible(provider, messages, mode) {
   const isGroq = provider === "groq";
-  const key = isGroq ? process.env.GROQ_API_KEY : process.env.OPENROUTER_API_KEY;
-  const model = isGroq
-    ? (process.env.GROQ_MODEL || "llama-3.3-70b-versatile")
-    : (process.env.OPENROUTER_MODEL || "openrouter/free");
-  const endpoint = isGroq
-    ? "https://api.groq.com/openai/v1/chat/completions"
-    : "https://openrouter.ai/api/v1/chat/completions";
+  const isDeepSeek = provider === "deepseek";
+  const key = isDeepSeek ? process.env.DEEPSEEK_API_KEY
+    : isGroq ? process.env.GROQ_API_KEY
+    : process.env.OPENROUTER_API_KEY;
+  const model = isDeepSeek
+    ? (process.env.DEEPSEEK_MODEL || "deepseek-chat")
+    : isGroq
+      ? (process.env.GROQ_MODEL || "llama-3.3-70b-versatile")
+      : (process.env.OPENROUTER_MODEL || "openrouter/free");
+  const endpoint = isDeepSeek
+    ? "https://api.deepseek.com/chat/completions"
+    : isGroq
+      ? "https://api.groq.com/openai/v1/chat/completions"
+      : "https://openrouter.ai/api/v1/chat/completions";
 
   const headers = {
     "Authorization": `Bearer ${key}`,
     "Content-Type": "application/json"
   };
-  if (!isGroq) {
+  if (!isGroq && !isDeepSeek) {
     headers["HTTP-Referer"] = process.env.APP_URL || "http://localhost:3000";
     headers["X-Title"] = "WHIT3KID-JAILBR3KER";
   }
@@ -142,6 +151,7 @@ app.get("/api/status", (req, res) => {
     developer: "WhiteKid TechZW",
     version: "3.0.0",
     providers: {
+      deepseek: Boolean(process.env.DEEPSEEK_API_KEY),
       gemini: Boolean(process.env.GEMINI_API_KEY),
       groq: Boolean(process.env.GROQ_API_KEY),
       openrouter: Boolean(process.env.OPENROUTER_API_KEY)
@@ -178,14 +188,14 @@ app.post("/api/chat", async (req, res) => {
     });
   }
 
-  const validIds = ["gemini", "groq", "openrouter"];
+  const validIds = PROVIDER_ORDER;
   if (provider !== "auto" && !validIds.includes(provider)) {
     return res.status(400).json({ error: "Unknown AI provider." });
   }
 
   const ordered = provider === "auto"
-    ? ["gemini", "groq", "openrouter"]
-    : [provider, ...["gemini", "groq", "openrouter"].filter(id => id !== provider)];
+    ? PROVIDER_ORDER
+    : [provider, ...PROVIDER_ORDER.filter(id => id !== provider)];
 
   const attempts = ordered.filter(id => configured.some(p => p.id === id));
   const errors = [];

@@ -37,7 +37,7 @@ async function loadStatus() {
     const data = await response.json();
     const entries = Object.entries(data.providers);
     const count = entries.filter(([, ready]) => ready).length;
-    $("#providerCount").textContent = `${count} / 3`;
+    $("#providerCount").textContent = `${count} / ${entries.length}`;
     $("#systemStatus").textContent = count ? "AI READY" : "SETUP REQUIRED";
     const markup = entries.map(([name, ready]) =>
       `<div class="provider-row"><span>${name[0].toUpperCase() + name.slice(1)}</span><span class="${ready ? "ready" : ""}">${ready ? "● CONFIGURED" : "○ NOT CONFIGURED"}</span></div>`
@@ -230,10 +230,7 @@ async function sendMessage() {
       body: JSON.stringify({ message, history: chatHistory, mode, provider })
     });
     const data = await response.json();
-    if (!response.ok) {
-      const detail = Array.isArray(data.details) && data.details.length ? "\n\n" + data.details.join("\n") : "";
-      throw new Error((data.error || "AI request failed") + detail);
-    }
+    if (!response.ok) throw new Error(data.error || "AI request failed");
     loading.textContent = data.answer;
     $("#chatProviderLabel").textContent = `Answered by ${data.provider}`;
     chatHistory.push({ role: "user", content: message }, { role: "assistant", content: data.answer });
